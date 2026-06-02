@@ -63,10 +63,6 @@ This project is open-source and licensed under the **[GNU General Public License
 
 ---
 
-## 🤖 AI Disclosure & Pair Programming
+## 🤖 AI Disclosure
 
-This project was built, designed, and optimized in a collaborative pair-programming partnership between **Ayush Soni** and **Antigravity**, a powerful agentic AI coding assistant developed by the **Google DeepMind** team. 
-
-From refactoring native Kotlin WebView bridges and widget update receivers to designing premium glassmorphic UI systems and implementing robust language constraints, this application stands as a beautiful showcase of human-AI software co-creation.
-
-
+This project was conceptualised and desgined by me and built using Antigravity by Google.
