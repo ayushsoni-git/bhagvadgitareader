@@ -61,3 +61,12 @@ Built with an elegant hybrid architecture (Kotlin + modern Web technologies), th
 
 This project is open-source and licensed under the **[GNU General Public License v3.0 (GPL v3)](LICENSE)**. Anyone who copies, uses, or modifies this code must also release their project under the same copyleft GPL license.
 
+---
+
+## 🤖 AI Disclosure & Pair Programming
+
+This project was built, designed, and optimized in a collaborative pair-programming partnership between **Ayush Soni** and **Antigravity**, a powerful agentic AI coding assistant developed by the **Google DeepMind** team. 
+
+From refactoring native Kotlin WebView bridges and widget update receivers to designing premium glassmorphic UI systems and implementing robust language constraints, this application stands as a beautiful showcase of human-AI software co-creation.
+
+
