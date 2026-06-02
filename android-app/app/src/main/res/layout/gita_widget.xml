@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:gravity="center">
+
+    <!-- Widget Title Header (Centered with Quote Marks) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="“   GITA DAILY WISDOM   •   गीता ज्ञान"
+        android:textColor="#ea580c"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Shloka Text (Light Gold, Centered, Elegant Devanagari, Auto-sizing) -->
+    <TextView
+        android:id="@+id/widget_shloka"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="कर्मण्येवाधिकारस्ते मा फलेषु कदाचन..."
+        android:textColor="#fef08a"
+        android:textSize="16sp"
+        android:textStyle="normal"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.2"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="11sp"
+        android:autoSizeMaxTextSize="16sp"
+        android:autoSizeStepGranularity="1sp"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- English Translation (Zinc Soft White, Centered, Italicized Quote, Auto-sizing) -->
+    <TextView
+        android:id="@+id/widget_translation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="You have a right to perform your prescribed duties..."
+        android:textColor="#e4e4e7"
+        android:textSize="12sp"
+        android:textStyle="italic"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.15"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeStepGranularity="1sp"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Reference (Subtle Zinc Muted, Centered at the bottom) -->
+    <TextView
+        android:id="@+id/widget_reference"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="— Chapter 2, Verse 47"
+        android:textColor="#a1a1aa"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:layout_gravity="center_horizontal" />
+
+</LinearLayout>
+

@@ -1,0 +1,13 @@
+# Local JDK
+jdk-17.0.19+10/
+
+# Android build outputs & local properties
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+android-app/*.keystore
+android-app/*.jks
+
+# OS files
+.DS_Store
