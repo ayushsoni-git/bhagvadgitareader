@@ -89,6 +89,9 @@ function initDOMSelectors() {
     toggleTranslit: document.getElementById('toggle-translit'),
     toggleHi: document.getElementById('toggle-hi'),
     toggleEn: document.getElementById('toggle-en'),
+    inlineToggleSa: document.getElementById('inline-toggle-sa'),
+    inlineToggleHi: document.getElementById('inline-toggle-hi'),
+    inlineToggleEn: document.getElementById('inline-toggle-en'),
     
     // Chapter navigation footer
     btnPrevChapter: document.getElementById('btn-prev-chapter'),
@@ -706,6 +709,20 @@ function renderReader(chapterNum) {
   dom.readerChMeaning.textContent = chData.meaning_en;
   dom.readerChVerses.textContent = `${chData.verses_count} Verses`;
   
+  // Initialize progress badge from local storage
+  const chProgressMap = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
+  const percent = parseInt(chProgressMap[String(chapterNum)]) || 0;
+  const progressBadge = document.getElementById('reader-ch-progress');
+  if (progressBadge) {
+    progressBadge.textContent = `${percent}% Completed`;
+    progressBadge.style.display = 'inline-block';
+  }
+
+  // Initialize bottom navigation pill immediately to prevent old/Hindi text layout flashing
+  const pos = JSON.parse(localStorage.getItem('gita_last_read_position'));
+  const startVerse = (pos && pos.chapter === chapterNum) ? pos.verse : 1;
+  updateNavigationPillText(chapterNum, startVerse);
+  
   // 2. Clear & Render Verses
   dom.versesListContainer.innerHTML = '';
   
@@ -883,6 +900,11 @@ function showToast(message, type = "info") {
 function openDrawer(drawerEl) {
   drawerEl.classList.add('open');
   document.body.style.overflow = 'hidden'; // Lock main scroll
+  
+  const scrollContainer = drawerEl.querySelector('.drawer-body');
+  if (scrollContainer) {
+    scrollContainer.scrollTop = 0;
+  }
   
   // Reset any swipe transition translations on open
   const content = drawerEl.querySelector('.drawer-content');
@@ -1223,6 +1245,11 @@ function updateElementsUI() {
   toggleBtnState(dom.toggleHi, state.elements.hi);
   toggleBtnState(dom.toggleEn, state.elements.en);
   
+  // Update inline header toggles active state
+  toggleBtnState(dom.inlineToggleSa, state.elements.sa);
+  toggleBtnState(dom.inlineToggleHi, state.elements.hi);
+  toggleBtnState(dom.inlineToggleEn, state.elements.en);
+  
   // Update checkboxes in global settings modal
   if (dom.prefSa) dom.prefSa.checked = state.elements.sa;
   if (dom.prefTranslit) dom.prefTranslit.checked = state.elements.translit;
@@ -1265,7 +1292,7 @@ function adjustFontSize(increment = true) {
 function initEventListeners() {
   // 1. Header & Navigation Taps
   dom.btnHeaderHome.addEventListener('click', () => navigateTo('home'));
-  dom.btnReaderBack.addEventListener('click', () => navigateTo('home'));
+  dom.btnReaderBack.addEventListener('click', () => navigateTo('chapters'));
   
   // 2. Bookmarks Screen / Study Guide Drawer
   if (dom.btnToggleBookmarks) {
@@ -1300,6 +1327,24 @@ function initEventListeners() {
     if (!btn) return;
     btn.addEventListener('click', () => {
       const type = btn.getAttribute('data-element');
+      if (['sa', 'hi', 'en'].includes(type) && state.elements[type]) {
+        const activeCount = ['sa', 'hi', 'en'].reduce((acc, curr) => acc + (state.elements[curr] ? 1 : 0), 0);
+        if (activeCount <= 1) {
+          showToast("At least one reading option must remain active!", "info");
+          return;
+        }
+      }
+      state.elements[type] = !state.elements[type];
+      savePreferences();
+      updateElementsUI();
+    });
+  });
+  
+  // 6.5. Inline language toggles
+  [dom.inlineToggleSa, dom.inlineToggleHi, dom.inlineToggleEn].forEach(btn => {
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const type = btn.getAttribute('data-lang');
       if (['sa', 'hi', 'en'].includes(type) && state.elements[type]) {
         const activeCount = ['sa', 'hi', 'en'].reduce((acc, curr) => acc + (state.elements[curr] ? 1 : 0), 0);
         if (activeCount <= 1) {
@@ -1481,6 +1526,16 @@ function initEventListeners() {
       closeQuickNav();
     });
   }
+
+  // Prevent background scrolling when dragging/scrolling on the quick nav panel
+  if (dom.panelQuickNav) {
+    dom.panelQuickNav.addEventListener('touchmove', (e) => {
+      const isScrollable = e.target.closest('.quick-nav-body');
+      if (!isScrollable) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  }
   
   // Close quick nav popup upon clicking outside
   document.addEventListener('click', (e) => {
@@ -1656,10 +1711,11 @@ function renderQuickNav() {
       dom.quickNavLabel.textContent = `अध्याय ${romanize(currentChapter)} • CHAPTER ${currentChapter}`;
     }
     
+    const activeVerseNum = (state.lastReadPosition && state.lastReadPosition.chapter === currentChapter) ? state.lastReadPosition.verse : 1;
     const verseCount = chData.verses_count;
     for (let v = 1; v <= verseCount; v++) {
       const btn = document.createElement('button');
-      btn.className = `quick-nav-item`;
+      btn.className = `quick-nav-item ${v === activeVerseNum ? 'active' : ''}`;
       btn.textContent = v;
       btn.title = `Verse ${v}`;
       
@@ -1980,6 +2036,14 @@ function updateNavigationPillText(chapter, verse) {
     }, 300);
     return;
   }
+
+  // Safeguard: Ensure the displayed chapter in reader mode always matches state.activeChapter
+  if (state.screen === 'reader' && state.activeChapter) {
+    if (!chapter || parseInt(chapter) !== state.activeChapter) {
+      chapter = state.activeChapter;
+      verse = verse || 1;
+    }
+  }
   
   dom.floatingRefCapsule.style.display = 'block';
   setTimeout(() => dom.floatingRefCapsule.classList.add('active'), 10);
@@ -1987,7 +2051,7 @@ function updateNavigationPillText(chapter, verse) {
   if (chapter && verse) {
     dom.floatingRefCapsule.textContent = `CH ${chapter} • VERSE ${verse}`;
   } else if (state.activeChapter) {
-    dom.floatingRefCapsule.textContent = `अध्याय ${romanize(state.activeChapter)} • CHAPTER ${state.activeChapter}`;
+    dom.floatingRefCapsule.textContent = `CH ${state.activeChapter} • VERSE 1`;
   }
 }
 
@@ -2000,20 +2064,25 @@ function updateChapterProgress(currentVerse, totalVerses) {
     bar.classList.add('active');
   }
   
-  const progressBadge = document.getElementById('reader-ch-progress');
-  if (progressBadge) {
-    progressBadge.textContent = `${progressPercent}% Completed`;
-    progressBadge.style.display = 'inline-block';
-  }
-
+  let maxProgress = progressPercent;
   // Persist maximum progress achieved in this chapter to local storage
   if (state.activeChapter) {
     const chProgress = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
-    const prevProgress = chProgress[state.activeChapter] || 0;
+    const chKey = String(state.activeChapter);
+    const prevProgress = parseInt(chProgress[chKey]) || 0;
     if (progressPercent > prevProgress) {
-      chProgress[state.activeChapter] = progressPercent;
+      chProgress[chKey] = progressPercent;
       localStorage.setItem('gita_chapter_progress', JSON.stringify(chProgress));
+      maxProgress = progressPercent;
+    } else {
+      maxProgress = prevProgress;
     }
+  }
+
+  const progressBadge = document.getElementById('reader-ch-progress');
+  if (progressBadge) {
+    progressBadge.textContent = `${maxProgress}% Completed`;
+    progressBadge.style.display = 'inline-block';
   }
 }
 
@@ -2030,7 +2099,16 @@ function hideProgressUI() {
 }
 
 // Register global window scroll listener
-window.addEventListener('scroll', handleReaderScroll, { passive: true });
+let scrollScheduled = false;
+window.addEventListener('scroll', () => {
+  if (!scrollScheduled) {
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+      handleReaderScroll();
+      scrollScheduled = false;
+    });
+  }
+}, { passive: true });
 
 // --------------------------------------------------------------------------
 // Touch Gesture Swipe-to-Close Explanations Bottom Drawer
@@ -2399,6 +2477,11 @@ function handleBackButton() {
   // If we are on search, settings, or bookmarks and have a saved reader chapter, go back to it!
   if ((state.screen === 'search' || state.screen === 'settings' || state.screen === 'bookmarks') && state.previousReaderChapter) {
     navigateTo('reader', state.previousReaderChapter);
+    return true;
+  }
+
+  if (state.screen === 'reader') {
+    navigateTo('chapters');
     return true;
   }
 

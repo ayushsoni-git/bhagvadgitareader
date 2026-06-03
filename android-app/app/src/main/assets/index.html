@@ -25,7 +25,14 @@
           <span class="sanskrit-logo">श्रीमद्भगवद्गीता</span>
           <span class="sub-logo">Bhagavad Gita</span>
         </div>
-        <div class="header-actions"></div>
+        <div class="header-actions">
+          <button id="btn-header-streak" class="header-streak-btn" title="View Streak Analytics">
+            <svg class="streak-icon-svg" viewBox="0 0 16 16">
+              <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z"/>
+            </svg>
+            <span id="header-streak-count" class="streak-count">0</span>
+          </button>
+        </div>
       </div>
       <div id="chapter-progress-bar" class="progress-bar"></div>
     </header>
@@ -56,47 +63,25 @@
           </div>
         </div>
 
-        <!-- Continue Reading Section (Shows dynamically if there's a last read position) -->
-        <div id="continue-section" class="continue-section" style="display:none;">
-          <div class="continue-card glass-glow">
-            <div class="continue-tag">
-              <svg class="tag-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-              <span>Continue Journey • पठन जारी रखें</span>
+        <!-- Premium Quick Actions Hub -->
+        <div class="home-quick-actions">
+          <div class="action-card glass-glow" id="btn-home-quick-chapters">
+            <div class="action-card-icon-wrapper chapters-icon">
+              <svg class="action-card-icon" viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
             </div>
-            <div class="continue-content">
-              <p id="continue-verse-preview" class="sanskrit">धर्मक्षेत्रे कुरुक्षेत्रे...</p>
-              <div class="continue-footer">
-                <span id="continue-ref-text">Chapter 1, Verse 1</span>
-                <button id="btn-continue-read" class="continue-action-btn">Resume Reading</button>
-              </div>
+            <div class="action-card-text">
+              <span class="action-card-title">All Chapters</span>
+              <span class="action-card-desc">18 divine chapters</span>
             </div>
           </div>
-        </div>
 
-        <!-- Streaks & Consistency Heatmap Section -->
-        <div id="streaks-section" class="streaks-section">
-          <div class="streaks-card glass-glow">
-            <div class="streaks-tag">
-              <svg class="tag-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:#ffbd59;"><path d="M12 23c-5.52 0-10-4.48-10-10S6.48 3 12 3s10 4.48 10 10-4.48 10-10 10zm-1-17.5v6.25l5.25 3.15.75-1.23-4.5-2.67V5.5h-1.5z"/></svg>
-              <span>Consistency & Streaks • पठन निरंतरता</span>
-              <span id="streak-fire-badge" class="streak-badge">🔥 0 Days</span>
+          <div class="action-card glass-glow" id="btn-home-quick-start">
+            <div class="action-card-icon-wrapper start-icon">
+              <svg class="action-card-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
             </div>
-            <div class="streaks-content">
-              <div class="heatmap-header">
-                <span class="heatmap-title">Reading Habit Heatmap (Last 10 Weeks)</span>
-                <span id="heatmap-stats" class="heatmap-stats">0 Verses Read</span>
-              </div>
-              <div id="streak-heatmap-grid" class="streak-heatmap-grid">
-                <!-- Heatmap grid boxes rendered dynamically via JS -->
-              </div>
-              <div class="heatmap-legend">
-                <span>Less</span>
-                <span class="legend-box level-0"></span>
-                <span class="legend-box level-1"></span>
-                <span class="legend-box level-2"></span>
-                <span class="legend-box level-3"></span>
-                <span>More</span>
-              </div>
+            <div class="action-card-text">
+              <span class="action-card-title" id="lbl-home-quick-start-title">Start</span>
+              <span class="action-card-desc" id="lbl-home-quick-start-desc">Chapter 1, Verse 1</span>
             </div>
           </div>
         </div>
@@ -145,6 +130,24 @@
               <span class="stat-badge" id="reader-ch-verses">47 Verses</span>
               <span class="stat-badge progress-text-badge" id="reader-ch-progress" style="display:none;">0% Completed</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Display Language Selector Card -->
+        <div class="reader-lang-card glass-glow">
+          <div class="lang-card-left">
+            <svg class="icon-small lang-card-icon" viewBox="0 0 24 24">
+              <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+            </svg>
+            <div class="lang-card-text">
+              <span class="lang-card-title">Display Languages</span>
+              <span class="lang-card-subtitle">भाषा चयन</span>
+            </div>
+          </div>
+          <div class="lang-card-segmented">
+            <button class="lang-toggle-btn" id="inline-toggle-sa" data-lang="sa">Sanskrit</button>
+            <button class="lang-toggle-btn" id="inline-toggle-hi" data-lang="hi">Hindi</button>
+            <button class="lang-toggle-btn" id="inline-toggle-en" data-lang="en">English</button>
           </div>
         </div>
 
@@ -213,17 +216,8 @@
       <!-- 4. SEARCH SCREEN -->
       <section id="screen-search" class="screen">
         <div class="search-section page-section">
-          <!-- Search results scroll area -->
-          <div id="search-results" class="search-results-list search-results-scrollable">
-            <div class="empty-state search-empty-state">
-              <svg class="empty-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-              <p>Begin your search</p>
-              <span>Type below or tap a theme to discover divine verses.</span>
-            </div>
-          </div>
-
-          <!-- Sticky Bottom Ergonomic Search Card for One-Handed Use -->
-          <div class="search-sticky-bottom glass-glow">
+          <!-- Sticky Top Ergonomic Search Card -->
+          <div class="search-sticky-top glass-glow">
             <div class="search-bar-row">
               <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
               <input type="text" id="input-search" placeholder="Search verses, wisdom keywords..." autocomplete="off" autocorrect="off" spellcheck="false">
@@ -244,6 +238,15 @@
                 <button class="keyword-pill-btn" data-keyword="Fear">Fear</button>
                 <button class="keyword-pill-btn" data-keyword="Wisdom">Wisdom</button>
               </div>
+            </div>
+          </div>
+
+          <!-- Search results scroll area -->
+          <div id="search-results" class="search-results-list search-results-scrollable">
+            <div class="empty-state search-empty-state">
+              <svg class="empty-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+              <p>Begin your search</p>
+              <span>Type below or tap a theme to discover divine verses.</span>
             </div>
           </div>
         </div>
@@ -486,9 +489,74 @@
       </div>
     </div>
 
-    <!-- Floating Scroll Position Capsule -->
+    <!-- 4.5. STREAK ANALYTICS DRAWER -->
+    <div id="drawer-streak-analytics" class="drawer bottom">
+      <div class="drawer-overlay" id="overlay-streak-analytics"></div>
+      <div class="drawer-content">
+        <div class="drawer-header">
+          <div class="study-guide-title-area">
+            <h3 class="streak-analytics-title">My Gita Sadhana • प्रगति</h3>
+            <span class="streak-analytics-subtitle">Sadhana &amp; Streaks</span>
+          </div>
+          <button class="icon-btn close-drawer" id="btn-close-streak-analytics">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="drawer-body">
+          <!-- Stats boxes side by side -->
+          <div class="streak-stats-row">
+            <div class="streak-stat-box glass">
+              <div class="streak-stat-value-group">
+                <span id="analytics-current-streak" class="streak-stat-value">0</span>
+                <svg class="streak-stat-icon-flat" viewBox="0 0 16 16">
+                  <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z"/>
+                </svg>
+              </div>
+              <span class="streak-stat-label">Current Streak</span>
+            </div>
+            
+            <div class="streak-stat-box glass">
+              <div class="streak-stat-value-group">
+                <span id="analytics-best-streak" class="streak-stat-value">0</span>
+                <svg class="streak-stat-icon-flat" viewBox="0 0 16 16">
+                  <path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z"/>
+                </svg>
+              </div>
+              <span class="streak-stat-label">Best Streak</span>
+            </div>
+          </div>
+
+          <!-- Motivational card -->
+          <div class="streak-motivational-card glass">
+            <p class="streak-motivational-text">
+              Streaks help you build a consistent Bhagavad Gita reading habit to connect with the divine wisdom daily.
+            </p>
+          </div>
+          
+          <!-- Contribution heatmap calendar -->
+          <div class="heatmap-section-analytics">
+            <div class="heatmap-header">
+              <span class="heatmap-title">Habit Calendar (Last 10 Weeks)</span>
+              <span id="analytics-heatmap-stats" class="heatmap-stats">0 Verses Read</span>
+            </div>
+            <div id="analytics-streak-heatmap-grid" class="streak-heatmap-grid">
+              <!-- Heatmap grid boxes rendered dynamically via JS -->
+            </div>
+            <div class="heatmap-legend">
+              <span>Less</span>
+              <span class="legend-box level-0"></span>
+              <span class="legend-box level-1"></span>
+              <span class="legend-box level-2"></span>
+              <span class="legend-box level-3"></span>
+              <span>More</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="reader-floating-ref" class="floating-ref-capsule glass" style="display: none;">
-      CHAPTER 1 • अध्याय १
+      CH 1 • VERSE 1
     </div>
 
     <!-- Sticky Floating Quick Navigation Bar -->
@@ -496,31 +564,31 @@
       <!-- 1. Home Tab -->
       <button id="btn-nav-home" class="quick-nav-side-btn active" title="Go to Dashboard">
         <svg class="icon-nav" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-        <span class="nav-tooltip">Dashboard</span>
+        <span class="nav-label">Home</span>
       </button>
       
       <!-- 2. Chapters Tab -->
       <button id="btn-nav-chapters" class="quick-nav-side-btn" title="Browse Chapters">
         <svg class="icon-nav" viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
-        <span class="nav-tooltip">Chapters</span>
+        <span class="nav-label">Chapters</span>
       </button>
       
       <!-- 3. Bookmarks / Spiritual Diary Tab -->
       <button id="btn-nav-bookmarks" class="quick-nav-side-btn" title="Spiritual Diary">
         <svg class="icon-nav" viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
-        <span class="nav-tooltip">Diary</span>
+        <span class="nav-label">Diary</span>
       </button>
 
       <!-- 4. Search Tab -->
       <button id="btn-nav-search" class="quick-nav-side-btn" title="Search Verses">
         <svg class="icon-nav" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        <span class="nav-tooltip">Search</span>
+        <span class="nav-label">Search</span>
       </button>
       
       <!-- 5. Settings Tab -->
       <button id="btn-nav-settings" class="quick-nav-side-btn" title="Settings">
         <svg class="icon-nav" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        <span class="nav-tooltip">Settings</span>
+        <span class="nav-label">Settings</span>
       </button>
     </div>
 

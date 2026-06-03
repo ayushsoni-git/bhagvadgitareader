@@ -4,7 +4,7 @@ const state = {
   activeChapter: null,
   activeVerse: null,
   fontSize: 'medium', // small, medium, large, xlarge
-  theme: 'dark',      // light, dark
+  theme: 'light',      // light, dark
   elements: {
     sa: true,
     translit: true,
@@ -89,6 +89,9 @@ function initDOMSelectors() {
     toggleTranslit: document.getElementById('toggle-translit'),
     toggleHi: document.getElementById('toggle-hi'),
     toggleEn: document.getElementById('toggle-en'),
+    inlineToggleSa: document.getElementById('inline-toggle-sa'),
+    inlineToggleHi: document.getElementById('inline-toggle-hi'),
+    inlineToggleEn: document.getElementById('inline-toggle-en'),
     
     // Chapter navigation footer
     btnPrevChapter: document.getElementById('btn-prev-chapter'),
@@ -144,6 +147,10 @@ function initDOMSelectors() {
     detailTranslationEnText: document.getElementById('detail-translation-en-text'),
     detailWordsBody: document.getElementById('detail-words-body'),
     detailWordsSection: document.getElementById('detail-words-section'),
+    detailCommentarySection: document.getElementById('detail-commentary-section'),
+    selectCommentator: document.getElementById('select-commentator'),
+    detailCommentaryTranslation: document.getElementById('detail-commentary-translation'),
+    detailCommentaryText: document.getElementById('detail-commentary-text'),
     btnDetailBookmark: document.getElementById('btn-detail-bookmark'),
     btnDetailCopy: document.getElementById('btn-detail-copy'),
     
@@ -202,7 +209,7 @@ function loadPreferences() {
   if (storedTheme) {
     state.theme = storedTheme;
   } else {
-    state.theme = 'dark';
+    state.theme = 'light';
   }
   applyThemeUI();
 }
@@ -706,6 +713,20 @@ function renderReader(chapterNum) {
   dom.readerChMeaning.textContent = chData.meaning_en;
   dom.readerChVerses.textContent = `${chData.verses_count} Verses`;
   
+  // Initialize progress badge from local storage
+  const chProgressMap = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
+  const percent = parseInt(chProgressMap[String(chapterNum)]) || 0;
+  const progressBadge = document.getElementById('reader-ch-progress');
+  if (progressBadge) {
+    progressBadge.textContent = `${percent}% Completed`;
+    progressBadge.style.display = 'inline-block';
+  }
+
+  // Initialize bottom navigation pill immediately to prevent old/Hindi text layout flashing
+  const pos = JSON.parse(localStorage.getItem('gita_last_read_position'));
+  const startVerse = (pos && pos.chapter === chapterNum) ? pos.verse : 1;
+  updateNavigationPillText(chapterNum, startVerse);
+  
   // 2. Clear & Render Verses
   dom.versesListContainer.innerHTML = '';
   
@@ -743,7 +764,7 @@ function renderReader(chapterNum) {
         <p class="verse-translation-en">${v.translation_en}</p>
       </div>
       <div class="verse-card-arrow" title="Expand Details">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
       </div>
     `;
     
@@ -884,6 +905,11 @@ function openDrawer(drawerEl) {
   drawerEl.classList.add('open');
   document.body.style.overflow = 'hidden'; // Lock main scroll
   
+  const scrollContainer = drawerEl.querySelector('.drawer-body');
+  if (scrollContainer) {
+    scrollContainer.scrollTop = 0;
+  }
+  
   // Reset any swipe transition translations on open
   const content = drawerEl.querySelector('.drawer-content');
   if (content) {
@@ -950,10 +976,78 @@ function openVerseDetail(key) {
     dom.detailWordsSection.style.display = 'none';
   }
   
+  // 2.5. Populate commentaries
+  updateCommentaryDisplay();
+  
   // 3. Setup Detail action buttons
   updateDetailBookmarkIcon(isBookmarked(key));
   
   openDrawer(dom.drawerVerseDetail);
+}
+
+function updateCommentaryDisplay() {
+  if (!state.activeVerse) return;
+  
+  const v = state.activeVerse;
+  
+  if (!v.commentaries || Object.keys(v.commentaries).length === 0) {
+    if (dom.detailCommentarySection) dom.detailCommentarySection.style.display = 'none';
+    return;
+  }
+  
+  if (dom.detailCommentarySection) dom.detailCommentarySection.style.display = 'block';
+  
+  const authorKey = dom.selectCommentator ? dom.selectCommentator.value : 'siva';
+  const commentary = v.commentaries[authorKey];
+  
+  if (commentary) {
+    // 1. Translation block
+    if (dom.detailCommentaryTranslation) {
+      if (commentary.translation) {
+        dom.detailCommentaryTranslation.style.display = 'block';
+        dom.detailCommentaryTranslation.textContent = commentary.translation;
+      } else {
+        dom.detailCommentaryTranslation.style.display = 'none';
+      }
+    }
+    
+    // 2. Commentary body block
+    if (dom.detailCommentaryText) {
+      if (commentary.commentary) {
+        dom.detailCommentaryText.style.display = 'block';
+        
+        let formattedText = commentary.commentary;
+        
+        // Match Devanagari Sanskrit sequences (Unicode range: \u0900-\u097F)
+        const devanagariRegex = /([\u0900-\u097F]+(?:[\s\u0900-\u097F,.:;|।\d]*[\u0900-\u097F])?)/g;
+        
+        const paragraphs = formattedText.split('\n').map(p => {
+          const cleaned = p.trim();
+          if (!cleaned) return '';
+          
+          // Pure Sanskrit lines (like shloka/citation lines in Shankara commentary)
+          const isSanskritPure = /^[\u0900-\u097F\s\d|।,.:;?"'!()\[\]{}–—\-\u2013\u2014]+$/.test(cleaned) && cleaned.length > 5;
+          if (isSanskritPure) {
+            return `<p><span class="sanskrit-citation">${cleaned}</span></p>`;
+          }
+          
+          // Inline highlighting
+          const processed = cleaned.replace(devanagariRegex, '<span class="sanskrit-citation">$1</span>');
+          return `<p>${processed}</p>`;
+        }).filter(Boolean).join('');
+        
+        dom.detailCommentaryText.innerHTML = paragraphs;
+      } else {
+        dom.detailCommentaryText.style.display = 'none';
+      }
+    }
+  } else {
+    if (dom.detailCommentaryTranslation) dom.detailCommentaryTranslation.style.display = 'none';
+    if (dom.detailCommentaryText) {
+      dom.detailCommentaryText.style.display = 'block';
+      dom.detailCommentaryText.innerHTML = '<p class="text-muted" style="text-align:center;">Commentary not available for this scholar.</p>';
+    }
+  }
 }
 
 function updateDetailBookmarkIcon(bookmarked) {
@@ -1223,6 +1317,11 @@ function updateElementsUI() {
   toggleBtnState(dom.toggleHi, state.elements.hi);
   toggleBtnState(dom.toggleEn, state.elements.en);
   
+  // Update inline header toggles active state
+  toggleBtnState(dom.inlineToggleSa, state.elements.sa);
+  toggleBtnState(dom.inlineToggleHi, state.elements.hi);
+  toggleBtnState(dom.inlineToggleEn, state.elements.en);
+  
   // Update checkboxes in global settings modal
   if (dom.prefSa) dom.prefSa.checked = state.elements.sa;
   if (dom.prefTranslit) dom.prefTranslit.checked = state.elements.translit;
@@ -1265,7 +1364,33 @@ function adjustFontSize(increment = true) {
 function initEventListeners() {
   // 1. Header & Navigation Taps
   dom.btnHeaderHome.addEventListener('click', () => navigateTo('home'));
-  dom.btnReaderBack.addEventListener('click', () => navigateTo('home'));
+  dom.btnReaderBack.addEventListener('click', () => navigateTo('chapters'));
+
+  // Bind Explore Chapters prompt card in dashboard
+  const btnHomeExploreChapters = document.getElementById('btn-home-explore-chapters');
+  if (btnHomeExploreChapters) {
+    btnHomeExploreChapters.addEventListener('click', () => navigateTo('chapters'));
+  }
+
+  // Bind Header Streak Badge and detailed analytics bottom slidesheet triggers
+  const btnHeaderStreak = document.getElementById('btn-header-streak');
+  const drawerStreakAnalytics = document.getElementById('drawer-streak-analytics');
+  const btnCloseStreakAnalytics = document.getElementById('btn-close-streak-analytics');
+  const overlayStreakAnalytics = document.getElementById('overlay-streak-analytics');
+
+  if (btnHeaderStreak && drawerStreakAnalytics) {
+    btnHeaderStreak.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDrawer(drawerStreakAnalytics);
+      renderHeatmap(); // Freshly render heatmap contributions
+    });
+  }
+  if (btnCloseStreakAnalytics && drawerStreakAnalytics) {
+    btnCloseStreakAnalytics.addEventListener('click', () => closeDrawer(drawerStreakAnalytics));
+  }
+  if (overlayStreakAnalytics && drawerStreakAnalytics) {
+    overlayStreakAnalytics.addEventListener('click', () => closeDrawer(drawerStreakAnalytics));
+  }
   
   // 2. Bookmarks Screen / Study Guide Drawer
   if (dom.btnToggleBookmarks) {
@@ -1313,6 +1438,24 @@ function initEventListeners() {
     });
   });
   
+  // 6.5. Inline language toggles
+  [dom.inlineToggleSa, dom.inlineToggleHi, dom.inlineToggleEn].forEach(btn => {
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const type = btn.getAttribute('data-lang');
+      if (['sa', 'hi', 'en'].includes(type) && state.elements[type]) {
+        const activeCount = ['sa', 'hi', 'en'].reduce((acc, curr) => acc + (state.elements[curr] ? 1 : 0), 0);
+        if (activeCount <= 1) {
+          showToast("At least one reading option must remain active!", "info");
+          return;
+        }
+      }
+      state.elements[type] = !state.elements[type];
+      savePreferences();
+      updateElementsUI();
+    });
+  });
+  
   // 7. Global Settings Modal element checkboxes
   [dom.prefSa, dom.prefTranslit, dom.prefHi, dom.prefEn].forEach(checkbox => {
     if (!checkbox) return;
@@ -1347,6 +1490,12 @@ function initEventListeners() {
   // 9. Verse detail drawer triggers
   dom.btnCloseDetail.addEventListener('click', () => closeDrawer(dom.drawerVerseDetail));
   dom.overlayVerseDetail.addEventListener('click', () => closeDrawer(dom.drawerVerseDetail));
+  
+  if (dom.selectCommentator) {
+    dom.selectCommentator.addEventListener('change', () => {
+      updateCommentaryDisplay();
+    });
+  }
   
   dom.btnDetailBookmark.addEventListener('click', () => {
     if (state.activeVerse) {
@@ -1480,6 +1629,16 @@ function initEventListeners() {
       e.stopPropagation();
       closeQuickNav();
     });
+  }
+
+  // Prevent background scrolling when dragging/scrolling on the quick nav panel
+  if (dom.panelQuickNav) {
+    dom.panelQuickNav.addEventListener('touchmove', (e) => {
+      const isScrollable = e.target.closest('.quick-nav-body');
+      if (!isScrollable) {
+        e.preventDefault();
+      }
+    }, { passive: false });
   }
   
   // Close quick nav popup upon clicking outside
@@ -1656,10 +1815,11 @@ function renderQuickNav() {
       dom.quickNavLabel.textContent = `अध्याय ${romanize(currentChapter)} • CHAPTER ${currentChapter}`;
     }
     
+    const activeVerseNum = (state.lastReadPosition && state.lastReadPosition.chapter === currentChapter) ? state.lastReadPosition.verse : 1;
     const verseCount = chData.verses_count;
     for (let v = 1; v <= verseCount; v++) {
       const btn = document.createElement('button');
-      btn.className = `quick-nav-item`;
+      btn.className = `quick-nav-item ${v === activeVerseNum ? 'active' : ''}`;
       btn.textContent = v;
       btn.title = `Verse ${v}`;
       
@@ -1987,7 +2147,7 @@ function updateNavigationPillText(chapter, verse) {
   if (chapter && verse) {
     dom.floatingRefCapsule.textContent = `CH ${chapter} • VERSE ${verse}`;
   } else if (state.activeChapter) {
-    dom.floatingRefCapsule.textContent = `अध्याय ${romanize(state.activeChapter)} • CHAPTER ${state.activeChapter}`;
+    dom.floatingRefCapsule.textContent = `CH ${state.activeChapter} • VERSE 1`;
   }
 }
 
@@ -2000,20 +2160,25 @@ function updateChapterProgress(currentVerse, totalVerses) {
     bar.classList.add('active');
   }
   
-  const progressBadge = document.getElementById('reader-ch-progress');
-  if (progressBadge) {
-    progressBadge.textContent = `${progressPercent}% Completed`;
-    progressBadge.style.display = 'inline-block';
-  }
-
+  let maxProgress = progressPercent;
   // Persist maximum progress achieved in this chapter to local storage
   if (state.activeChapter) {
     const chProgress = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
-    const prevProgress = chProgress[state.activeChapter] || 0;
+    const chKey = String(state.activeChapter);
+    const prevProgress = parseInt(chProgress[chKey]) || 0;
     if (progressPercent > prevProgress) {
-      chProgress[state.activeChapter] = progressPercent;
+      chProgress[chKey] = progressPercent;
       localStorage.setItem('gita_chapter_progress', JSON.stringify(chProgress));
+      maxProgress = progressPercent;
+    } else {
+      maxProgress = prevProgress;
     }
+  }
+
+  const progressBadge = document.getElementById('reader-ch-progress');
+  if (progressBadge) {
+    progressBadge.textContent = `${maxProgress}% Completed`;
+    progressBadge.style.display = 'inline-block';
   }
 }
 
@@ -2030,7 +2195,16 @@ function hideProgressUI() {
 }
 
 // Register global window scroll listener
-window.addEventListener('scroll', handleReaderScroll, { passive: true });
+let scrollScheduled = false;
+window.addEventListener('scroll', () => {
+  if (!scrollScheduled) {
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+      handleReaderScroll();
+      scrollScheduled = false;
+    });
+  }
+}, { passive: true });
 
 // --------------------------------------------------------------------------
 // Touch Gesture Swipe-to-Close Explanations Bottom Drawer
@@ -2154,32 +2328,23 @@ function renderContinueCard() {
   const pos = state.lastReadPosition;
   if (!pos || !pos.key) return;
   
-  const verse = GITA_DATA.verses[pos.key];
-  if (!verse) return;
+  const quickStartBtn = document.getElementById('btn-home-quick-start');
+  const quickChaptersBtn = document.getElementById('btn-home-quick-chapters');
+  const quickTitle = document.getElementById('lbl-home-quick-start-title');
+  const quickDesc = document.getElementById('lbl-home-quick-start-desc');
   
-  const contSec = document.getElementById('continue-section');
-  const contTag = document.querySelector('.continue-tag span');
-  const contPreview = document.getElementById('continue-verse-preview');
-  const contRef = document.getElementById('continue-ref-text');
-  const resumeBtn = document.getElementById('btn-continue-read');
-  
-  if (contSec && contPreview && contRef && resumeBtn) {
-    // Show the English translation instead of Sanskrit
-    contPreview.classList.remove('sanskrit');
-    contPreview.style.fontFamily = 'var(--font-main)';
-    contPreview.style.fontSize = '1.02rem';
-    contPreview.style.lineHeight = '1.6';
-    contPreview.style.fontStyle = 'italic';
-    contPreview.style.color = 'var(--text-secondary)';
-    contPreview.style.fontWeight = '400';
-    contPreview.textContent = verse.translation_en;
-    
-    if (pos.isFirstLaunch) {
-      if (contTag) contTag.textContent = 'Start Journey • पठन प्रारम्भ करें';
-      contRef.textContent = `Chapter 1, Verse 1 • अध्याय १, श्लोक १`;
-      resumeBtn.textContent = 'Start Reading';
-      
-      resumeBtn.onclick = () => {
+  if (pos.isFirstLaunch) {
+    if (quickTitle) quickTitle.textContent = 'Start';
+    if (quickDesc) quickDesc.textContent = 'Chapter 1, Verse 1';
+  } else {
+    if (quickTitle) quickTitle.textContent = 'Resume';
+    if (quickDesc) quickDesc.textContent = `Chapter ${pos.chapter}, Verse ${pos.verse}`;
+  }
+
+  // Bind Quick Actions Hub clicks
+  if (quickStartBtn) {
+    quickStartBtn.onclick = () => {
+      if (pos.isFirstLaunch) {
         navigateTo('reader', 1);
         setTimeout(() => {
           const card = document.querySelector(`.verse-card[data-key="1.1"]`);
@@ -2190,13 +2355,7 @@ function renderContinueCard() {
             card.classList.add('verse-highlight-flash');
           }
         }, 400);
-      };
-    } else {
-      if (contTag) contTag.textContent = 'Continue Journey • पठन जारी रखें';
-      contRef.textContent = `Chapter ${pos.chapter}, Verse ${pos.verse} • अध्याय ${pos.chapter}, श्लोक ${pos.verse}`;
-      resumeBtn.textContent = 'Resume Reading';
-      
-      resumeBtn.onclick = () => {
+      } else {
         navigateTo('reader', pos.chapter);
         setTimeout(() => {
           const card = document.querySelector(`.verse-card[data-key="${pos.key}"]`);
@@ -2207,10 +2366,14 @@ function renderContinueCard() {
             card.classList.add('verse-highlight-flash');
           }
         }, 400);
-      };
-    }
-    
-    contSec.style.display = 'block';
+      }
+    };
+  }
+  
+  if (quickChaptersBtn) {
+    quickChaptersBtn.onclick = () => {
+      navigateTo('chapters');
+    };
   }
 }
 
@@ -2383,6 +2546,11 @@ function initGuidedReadingPaths() {
 
 // Global window-level back gesture handler invoked by Android native wrapper
 function handleBackButton() {
+  const drawerStreakAnalytics = document.getElementById('drawer-streak-analytics');
+  if (drawerStreakAnalytics && drawerStreakAnalytics.classList.contains('open')) {
+    closeDrawer(drawerStreakAnalytics);
+    return true;
+  }
   if (dom.drawerVerseDetail && dom.drawerVerseDetail.classList.contains('open')) {
     closeDrawer(dom.drawerVerseDetail);
     return true;
@@ -2399,6 +2567,11 @@ function handleBackButton() {
   // If we are on search, settings, or bookmarks and have a saved reader chapter, go back to it!
   if ((state.screen === 'search' || state.screen === 'settings' || state.screen === 'bookmarks') && state.previousReaderChapter) {
     navigateTo('reader', state.previousReaderChapter);
+    return true;
+  }
+
+  if (state.screen === 'reader') {
+    navigateTo('chapters');
     return true;
   }
 
@@ -2540,9 +2713,9 @@ function calculateStreak() {
 }
 
 function renderHeatmap() {
-  const gridContainer = document.getElementById('streak-heatmap-grid');
-  const fireBadge = document.getElementById('streak-fire-badge');
-  const statsSpan = document.getElementById('heatmap-stats');
+  const gridContainer = document.getElementById('analytics-streak-heatmap-grid');
+  const fireBadge = document.getElementById('header-streak-count');
+  const statsSpan = document.getElementById('analytics-heatmap-stats');
   if (!gridContainer) return;
 
   gridContainer.innerHTML = '';
@@ -2555,12 +2728,24 @@ function renderHeatmap() {
     statsSpan.textContent = `${totalVerses} ${totalVerses === 1 ? 'Verse' : 'Verses'} Read`;
   }
 
-  // Render fire streak badge
+  // Render fire streak badge & best streak updates
   const streak = calculateStreak();
-  if (fireBadge) {
-    fireBadge.textContent = `🔥 ${streak} ${streak === 1 ? 'Day' : 'Days'}`;
-    fireBadge.style.display = streak > 0 ? 'inline-block' : 'none';
+  let bestStreak = parseInt(localStorage.getItem('gita_best_streak') || '0');
+  if (streak > bestStreak) {
+    bestStreak = streak;
+    localStorage.setItem('gita_best_streak', bestStreak.toString());
   }
+
+  // Update badge count
+  if (fireBadge) {
+    fireBadge.textContent = streak;
+  }
+
+  // Update detailed analytics counters in bottom sheet
+  const analyticsCurrentStreak = document.getElementById('analytics-current-streak');
+  const analyticsBestStreak = document.getElementById('analytics-best-streak');
+  if (analyticsCurrentStreak) analyticsCurrentStreak.textContent = streak;
+  if (analyticsBestStreak) analyticsBestStreak.textContent = bestStreak;
 
   // Draw a 10-week grid (70 days) ending today
   const boxes = [];
