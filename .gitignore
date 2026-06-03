@@ -11,3 +11,19 @@ android-app/*.jks
 
 # OS files
 .DS_Store
+
+# Dev/debug screenshots dumped in root during development
+screencap*.png
+sc_*.png
+sc[0-9]*.png
+shloka_*.png
+jump_menu_*.png
+fresh_*.png
+*_loaded.png
+*_view.png
+
+# APK releases (distributed via GitHub Releases, not committed to repo)
+*.apk
+
+# Scratch / temp files
+scratch/
