@@ -4,7 +4,7 @@ const state = {
   activeChapter: null,
   activeVerse: null,
   fontSize: 'medium', // small, medium, large, xlarge
-  theme: 'dark',      // light, dark
+  theme: 'light',      // light, dark
   elements: {
     sa: true,
     translit: true,
@@ -18,7 +18,11 @@ const state = {
     verseKey: '2.47'
   },
   previousReaderChapter: null,
-  previousReaderScrollKey: null
+  previousReaderScrollKey: null,
+  // Performance: dirty flags and caches
+  chaptersDirty: true,       // triggers renderChapters() only when needed
+  heatmapDirty: false,       // renderHeatmap() deferred until drawer opens
+  chapterProgressCache: {}   // in-memory cache for chapter progress map
 };
 
 // Hand-curated list of the 50 most profound, inspiring, and famous verses in the Gita
@@ -147,6 +151,10 @@ function initDOMSelectors() {
     detailTranslationEnText: document.getElementById('detail-translation-en-text'),
     detailWordsBody: document.getElementById('detail-words-body'),
     detailWordsSection: document.getElementById('detail-words-section'),
+    detailCommentarySection: document.getElementById('detail-commentary-section'),
+    selectCommentator: document.getElementById('select-commentator'),
+    detailCommentaryTranslation: document.getElementById('detail-commentary-translation'),
+    detailCommentaryText: document.getElementById('detail-commentary-text'),
     btnDetailBookmark: document.getElementById('btn-detail-bookmark'),
     btnDetailCopy: document.getElementById('btn-detail-copy'),
     
@@ -205,7 +213,7 @@ function loadPreferences() {
   if (storedTheme) {
     state.theme = storedTheme;
   } else {
-    state.theme = 'dark';
+    state.theme = 'light';
   }
   applyThemeUI();
 }
@@ -269,8 +277,8 @@ function toggleBookmark(key) {
     }
   }
   
-  // Re-render home chapters grid to show proper bookmark badges
-  renderChapters();
+  // Mark chapters dirty so home/chapters screens refresh on next visit
+  state.chaptersDirty = true;
 }
 
 function isBookmarked(key) {
@@ -501,11 +509,12 @@ function showScreenUI(screenName) {
   // Handle specific elements per screen
   if (screenName === 'home') {
     hideProgressUI();
-    renderChapters(); // Force re-render of chapter progress badges on returning home
-    initContinueReading();
-    if (typeof renderHeatmap === 'function') {
-      renderHeatmap();
+    // Only re-render chapter cards when data has actually changed
+    if (state.chaptersDirty) {
+      renderChapters();
+      state.chaptersDirty = false;
     }
+    initContinueReading();
     if (dom.readerQuickNav) {
       dom.readerQuickNav.style.display = 'flex';
     }
@@ -519,6 +528,11 @@ function showScreenUI(screenName) {
     }
   } else if (screenName === 'chapters') {
     hideProgressUI();
+    // Re-render chapter list if dirty (bookmarks or progress changed)
+    if (state.chaptersDirty) {
+      renderChapters();
+      state.chaptersDirty = false;
+    }
     if (dom.readerQuickNav) {
       dom.readerQuickNav.style.display = 'flex';
     }
@@ -709,8 +723,9 @@ function renderReader(chapterNum) {
   dom.readerChMeaning.textContent = chData.meaning_en;
   dom.readerChVerses.textContent = `${chData.verses_count} Verses`;
   
-  // Initialize progress badge from local storage
-  const chProgressMap = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
+  // Pre-load chapter progress into memory cache (avoids repeated JSON.parse during scroll)
+  state.chapterProgressCache = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
+  const chProgressMap = state.chapterProgressCache;
   const percent = parseInt(chProgressMap[String(chapterNum)]) || 0;
   const progressBadge = document.getElementById('reader-ch-progress');
   if (progressBadge) {
@@ -760,7 +775,7 @@ function renderReader(chapterNum) {
         <p class="verse-translation-en">${v.translation_en}</p>
       </div>
       <div class="verse-card-arrow" title="Expand Details">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
       </div>
     `;
     
@@ -972,10 +987,78 @@ function openVerseDetail(key) {
     dom.detailWordsSection.style.display = 'none';
   }
   
+  // 2.5. Populate commentaries
+  updateCommentaryDisplay();
+  
   // 3. Setup Detail action buttons
   updateDetailBookmarkIcon(isBookmarked(key));
   
   openDrawer(dom.drawerVerseDetail);
+}
+
+function updateCommentaryDisplay() {
+  if (!state.activeVerse) return;
+  
+  const v = state.activeVerse;
+  
+  if (!v.commentaries || Object.keys(v.commentaries).length === 0) {
+    if (dom.detailCommentarySection) dom.detailCommentarySection.style.display = 'none';
+    return;
+  }
+  
+  if (dom.detailCommentarySection) dom.detailCommentarySection.style.display = 'block';
+  
+  const authorKey = dom.selectCommentator ? dom.selectCommentator.value : 'siva';
+  const commentary = v.commentaries[authorKey];
+  
+  if (commentary) {
+    // 1. Translation block
+    if (dom.detailCommentaryTranslation) {
+      if (commentary.translation) {
+        dom.detailCommentaryTranslation.style.display = 'block';
+        dom.detailCommentaryTranslation.textContent = commentary.translation;
+      } else {
+        dom.detailCommentaryTranslation.style.display = 'none';
+      }
+    }
+    
+    // 2. Commentary body block
+    if (dom.detailCommentaryText) {
+      if (commentary.commentary) {
+        dom.detailCommentaryText.style.display = 'block';
+        
+        let formattedText = commentary.commentary;
+        
+        // Match Devanagari Sanskrit sequences (Unicode range: \u0900-\u097F)
+        const devanagariRegex = /([\u0900-\u097F]+(?:[\s\u0900-\u097F,.:;|।\d]*[\u0900-\u097F])?)/g;
+        
+        const paragraphs = formattedText.split('\n').map(p => {
+          const cleaned = p.trim();
+          if (!cleaned) return '';
+          
+          // Pure Sanskrit lines (like shloka/citation lines in Shankara commentary)
+          const isSanskritPure = /^[\u0900-\u097F\s\d|।,.:;?"'!()\[\]{}–—\-\u2013\u2014]+$/.test(cleaned) && cleaned.length > 5;
+          if (isSanskritPure) {
+            return `<p><span class="sanskrit-citation">${cleaned}</span></p>`;
+          }
+          
+          // Inline highlighting
+          const processed = cleaned.replace(devanagariRegex, '<span class="sanskrit-citation">$1</span>');
+          return `<p>${processed}</p>`;
+        }).filter(Boolean).join('');
+        
+        dom.detailCommentaryText.innerHTML = paragraphs;
+      } else {
+        dom.detailCommentaryText.style.display = 'none';
+      }
+    }
+  } else {
+    if (dom.detailCommentaryTranslation) dom.detailCommentaryTranslation.style.display = 'none';
+    if (dom.detailCommentaryText) {
+      dom.detailCommentaryText.style.display = 'block';
+      dom.detailCommentaryText.innerHTML = '<p class="text-muted" style="text-align:center;">Commentary not available for this scholar.</p>';
+    }
+  }
 }
 
 function updateDetailBookmarkIcon(bookmarked) {
@@ -1293,6 +1376,34 @@ function initEventListeners() {
   // 1. Header & Navigation Taps
   dom.btnHeaderHome.addEventListener('click', () => navigateTo('home'));
   dom.btnReaderBack.addEventListener('click', () => navigateTo('chapters'));
+
+  // Bind Explore Chapters prompt card in dashboard
+  const btnHomeExploreChapters = document.getElementById('btn-home-explore-chapters');
+  if (btnHomeExploreChapters) {
+    btnHomeExploreChapters.addEventListener('click', () => navigateTo('chapters'));
+  }
+
+  // Bind Header Streak Badge and detailed analytics bottom slidesheet triggers
+  const btnHeaderStreak = document.getElementById('btn-header-streak');
+  const drawerStreakAnalytics = document.getElementById('drawer-streak-analytics');
+  const btnCloseStreakAnalytics = document.getElementById('btn-close-streak-analytics');
+  const overlayStreakAnalytics = document.getElementById('overlay-streak-analytics');
+
+  if (btnHeaderStreak && drawerStreakAnalytics) {
+    btnHeaderStreak.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDrawer(drawerStreakAnalytics);
+      // Render heatmap now (and whenever dirty from scroll reading events)
+      renderHeatmap();
+      state.heatmapDirty = false;
+    });
+  }
+  if (btnCloseStreakAnalytics && drawerStreakAnalytics) {
+    btnCloseStreakAnalytics.addEventListener('click', () => closeDrawer(drawerStreakAnalytics));
+  }
+  if (overlayStreakAnalytics && drawerStreakAnalytics) {
+    overlayStreakAnalytics.addEventListener('click', () => closeDrawer(drawerStreakAnalytics));
+  }
   
   // 2. Bookmarks Screen / Study Guide Drawer
   if (dom.btnToggleBookmarks) {
@@ -1392,6 +1503,12 @@ function initEventListeners() {
   // 9. Verse detail drawer triggers
   dom.btnCloseDetail.addEventListener('click', () => closeDrawer(dom.drawerVerseDetail));
   dom.overlayVerseDetail.addEventListener('click', () => closeDrawer(dom.drawerVerseDetail));
+  
+  if (dom.selectCommentator) {
+    dom.selectCommentator.addEventListener('change', () => {
+      updateCommentaryDisplay();
+    });
+  }
   
   dom.btnDetailBookmark.addEventListener('click', () => {
     if (state.activeVerse) {
@@ -1546,9 +1663,13 @@ function initEventListeners() {
     }
   });
 
-  // 14. Real-time Search handlers
+  // 14. Real-time Search handlers — debounced 200ms to avoid scanning 700+ verses per keystroke
+  let searchDebounceTimer = null;
   if (dom.inputSearch) {
-    dom.inputSearch.addEventListener('input', handleSearchInput);
+    dom.inputSearch.addEventListener('input', (e) => {
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => handleSearchInput(e), 200);
+    });
   }
   if (dom.btnClearSearch) {
     dom.btnClearSearch.addEventListener('click', clearSearch);
@@ -1645,6 +1766,9 @@ function initEventListeners() {
       exportDiaryToPDF();
     });
   }
+
+  // 18. Set up Quick Nav tab + section scroll buttons once (not re-bound every panel open)
+  initQuickNavTabs();
 }
 
 // --------------------------------------------------------------------------
@@ -1681,160 +1805,154 @@ function closeQuickNav() {
   }, 350);
 }
 
+// Track last rendered quick nav chapter so we skip rebuilding verses when unchanged
+let _quickNavLastChapter = null;
+
 function renderQuickNav() {
   if (!dom.quickNavChapters || !dom.quickNavVerses) return;
   
   const currentChapter = state.activeChapter || 1;
-  
-  // 1. Generate Chapters Grid (1-18)
-  dom.quickNavChapters.innerHTML = '';
-  for (let c = 1; c <= 18; c++) {
-    const btn = document.createElement('button');
-    btn.className = `quick-nav-item ${c === currentChapter ? 'active' : ''}`;
-    btn.textContent = c;
-    btn.title = `Chapter ${c}`;
-    
-    btn.addEventListener('click', (e) => {
+
+  // 1. Chapters grid — update active state without full rebuild if possible
+  const existingChBtns = dom.quickNavChapters.querySelectorAll('.quick-nav-item');
+  if (existingChBtns.length === 18) {
+    // Already rendered — just update active highlight
+    existingChBtns.forEach((btn, i) => {
+      btn.classList.toggle('active', (i + 1) === currentChapter);
+    });
+  } else {
+    // First render — build chapters grid
+    dom.quickNavChapters.innerHTML = '';
+    for (let c = 1; c <= 18; c++) {
+      const btn = document.createElement('button');
+      btn.className = `quick-nav-item ${c === currentChapter ? 'active' : ''}`;
+      btn.textContent = c;
+      btn.title = `Chapter ${c}`;
+      btn.dataset.ch = c;
+      dom.quickNavChapters.appendChild(btn);
+    }
+    // Single delegated listener on the chapters grid
+    dom.quickNavChapters.addEventListener('click', (e) => {
+      const btn = e.target.closest('.quick-nav-item');
+      if (!btn) return;
       e.stopPropagation();
+      const c = parseInt(btn.dataset.ch);
       state.activeChapter = c;
       location.hash = `chapter=${c}`;
+      _quickNavLastChapter = null; // Force verses rebuild
       renderQuickNav();
     });
-    dom.quickNavChapters.appendChild(btn);
   }
-  
-  // 2. Generate Verses Grid based on selected chapter
-  dom.quickNavVerses.innerHTML = '';
-  const chData = GITA_DATA.chapters[currentChapter - 1];
-  if (chData) {
-    if (dom.quickNavLabel) {
-      dom.quickNavLabel.textContent = `अध्याय ${romanize(currentChapter)} • CHAPTER ${currentChapter}`;
-    }
-    
-    const activeVerseNum = (state.lastReadPosition && state.lastReadPosition.chapter === currentChapter) ? state.lastReadPosition.verse : 1;
-    const verseCount = chData.verses_count;
-    for (let v = 1; v <= verseCount; v++) {
-      const btn = document.createElement('button');
-      btn.className = `quick-nav-item ${v === activeVerseNum ? 'active' : ''}`;
-      btn.textContent = v;
-      btn.title = `Verse ${v}`;
-      
-      btn.addEventListener('click', (e) => {
+
+  // 2. Verses grid — only rebuild when chapter changes
+  if (_quickNavLastChapter !== currentChapter) {
+    _quickNavLastChapter = currentChapter;
+    dom.quickNavVerses.innerHTML = '';
+    const chData = GITA_DATA.chapters[currentChapter - 1];
+    if (chData) {
+      if (dom.quickNavLabel) {
+        dom.quickNavLabel.textContent = `अध्याय ${romanize(currentChapter)} • CHAPTER ${currentChapter}`;
+      }
+      const activeVerseNum = (state.lastReadPosition && state.lastReadPosition.chapter === currentChapter) ? state.lastReadPosition.verse : 1;
+      const verseCount = chData.verses_count;
+      // Build verses grid with a single delegated listener
+      for (let v = 1; v <= verseCount; v++) {
+        const btn = document.createElement('button');
+        btn.className = `quick-nav-item ${v === activeVerseNum ? 'active' : ''}`;
+        btn.textContent = v;
+        btn.title = `Verse ${v}`;
+        btn.dataset.v = v;
+        dom.quickNavVerses.appendChild(btn);
+      }
+      dom.quickNavVerses.addEventListener('click', (e) => {
+        const btn = e.target.closest('.quick-nav-item');
+        if (!btn) return;
         e.stopPropagation();
+        const v = parseInt(btn.dataset.v);
         closeQuickNav();
-        
         const key = `${currentChapter}.${v}`;
         const targetCard = document.querySelector(`.verse-card[data-key="${key}"]`);
         if (targetCard) {
           targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
           targetCard.classList.remove('verse-highlight-flash');
-          void targetCard.offsetWidth; // Force Reflow
+          void targetCard.offsetWidth;
           targetCard.classList.add('verse-highlight-flash');
         }
-      });
-      dom.quickNavVerses.appendChild(btn);
+      }, { once: false });
     }
+  } else {
+    // Chapter unchanged — just update the active verse highlight
+    const activeVerseNum = (state.lastReadPosition && state.lastReadPosition.chapter === currentChapter) ? state.lastReadPosition.verse : 1;
+    dom.quickNavVerses.querySelectorAll('.quick-nav-item').forEach((btn) => {
+      btn.classList.toggle('active', parseInt(btn.dataset.v) === activeVerseNum);
+    });
   }
 
-  // 3. Generate Chapters Scrollable List (Dynamic list of all 18 Chapters for instant access)
-  if (dom.quickNavChaptersList) {
-    dom.quickNavChaptersList.innerHTML = '';
-    const chProgressMap = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
+  // 3. Chapters scrollable list — built once, not rebuilt on every open
+  if (dom.quickNavChaptersList && dom.quickNavChaptersList.children.length === 0) {
+    const chProgressMap = state.chapterProgressCache && Object.keys(state.chapterProgressCache).length > 0
+      ? state.chapterProgressCache
+      : JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
     GITA_DATA.chapters.forEach(ch => {
       const item = document.createElement('div');
       item.className = 'quick-chapter-list-item';
-      
-      // Check if any verse in this chapter is bookmarked
       const chapterBookmarks = state.bookmarks.filter(k => k.startsWith(`${ch.chapter_number}.`));
-      const badgeHTML = chapterBookmarks.length > 0 
+      const badgeHTML = chapterBookmarks.length > 0
         ? `<span class="quick-ch-saved-badge">🔥 ${chapterBookmarks.length} saved</span>`
         : '';
-        
-      // Read completion percentage
       const percent = chProgressMap[ch.chapter_number] || 0;
-      let progressBadgeHTML = '';
-      if (percent === 100) {
-        progressBadgeHTML = `<span class="quick-ch-progress completed">100% Done</span>`;
-      } else if (percent > 0) {
-        progressBadgeHTML = `<span class="quick-ch-progress started">${percent}% Done</span>`;
-      } else {
-        progressBadgeHTML = `<span class="quick-ch-progress not-started">Not Started</span>`;
-      }
-      
+      let progressBadgeHTML = percent === 100
+        ? `<span class="quick-ch-progress completed">100% Done</span>`
+        : percent > 0
+          ? `<span class="quick-ch-progress started">${percent}% Done</span>`
+          : `<span class="quick-ch-progress not-started">Not Started</span>`;
       item.innerHTML = `
         <div class="quick-ch-left">
           <span class="quick-ch-num">Chapter ${ch.chapter_number} • अध्याय ${romanize(ch.chapter_number)}</span>
           <span class="quick-ch-title-sansk">${ch.name}</span>
-          <div class="quick-ch-meta">
-            ${progressBadgeHTML}
-            ${badgeHTML}
-          </div>
+          <div class="quick-ch-meta">${progressBadgeHTML}${badgeHTML}</div>
         </div>
         <div class="quick-ch-right">
           <span class="quick-ch-title-en">${ch.translation}</span>
           <span class="quick-ch-verses">${ch.verses_count} Verses</span>
         </div>
       `;
-      
       item.onclick = (e) => {
         e.stopPropagation();
         closeQuickNav();
         navigateTo('reader', ch.chapter_number);
       };
-      
       dom.quickNavChaptersList.appendChild(item);
     });
   }
-
-  // 4. Initialize Navigation Tabs & Shortcut Scrolls
-  initQuickNavTabs();
 }
 
+// initQuickNavTabs is now called once from initEventListeners — not per renderQuickNav open
 function initQuickNavTabs() {
-  // Bind tab buttons
-  const tabBtns = document.querySelectorAll('.nav-tab-btn');
-  tabBtns.forEach(btn => {
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-    
-    newBtn.addEventListener('click', (e) => {
+  // Bind tab buttons (one-time setup)
+  document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const targetId = newBtn.getAttribute('data-target');
-      
-      // Deactivate all tabs & contents
+      const targetId = btn.getAttribute('data-target');
       document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.nav-tab-content').forEach(view => view.classList.remove('active'));
-      
-      // Activate clicked tab
-      newBtn.classList.add('active');
+      btn.classList.add('active');
       const targetView = document.getElementById(targetId);
       if (targetView) targetView.classList.add('active');
-      
       updateNavTabGlow();
     });
   });
 
-  // Bind page section shortcut scrolls
-  const sectionBtns = document.querySelectorAll('.section-nav-link-btn');
-  sectionBtns.forEach(btn => {
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-    
-    newBtn.addEventListener('click', (e) => {
+  // Bind page section shortcut scrolls (one-time setup)
+  document.querySelectorAll('.section-nav-link-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const selector = newBtn.getAttribute('data-scroll-to');
+      const selector = btn.getAttribute('data-scroll-to');
       closeQuickNav();
-      
-      if (state.screen !== 'home') {
-        navigateTo('home');
-      }
-      
+      if (state.screen !== 'home') navigateTo('home');
       setTimeout(() => {
         const targetSec = document.querySelector(`.${selector}`) || document.getElementById(selector);
-        if (targetSec) {
-          targetSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        if (targetSec) targetSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, state.screen === 'home' ? 50 : 450);
     });
   });
@@ -2036,14 +2154,6 @@ function updateNavigationPillText(chapter, verse) {
     }, 300);
     return;
   }
-
-  // Safeguard: Ensure the displayed chapter in reader mode always matches state.activeChapter
-  if (state.screen === 'reader' && state.activeChapter) {
-    if (!chapter || parseInt(chapter) !== state.activeChapter) {
-      chapter = state.activeChapter;
-      verse = verse || 1;
-    }
-  }
   
   dom.floatingRefCapsule.style.display = 'block';
   setTimeout(() => dom.floatingRefCapsule.classList.add('active'), 10);
@@ -2065,14 +2175,15 @@ function updateChapterProgress(currentVerse, totalVerses) {
   }
   
   let maxProgress = progressPercent;
-  // Persist maximum progress achieved in this chapter to local storage
+  // Use in-memory cache — avoids JSON.parse on every scroll frame
   if (state.activeChapter) {
-    const chProgress = JSON.parse(localStorage.getItem('gita_chapter_progress') || '{}');
     const chKey = String(state.activeChapter);
-    const prevProgress = parseInt(chProgress[chKey]) || 0;
+    const prevProgress = parseInt(state.chapterProgressCache[chKey]) || 0;
     if (progressPercent > prevProgress) {
-      chProgress[chKey] = progressPercent;
-      localStorage.setItem('gita_chapter_progress', JSON.stringify(chProgress));
+      state.chapterProgressCache[chKey] = progressPercent;
+      // Persist to localStorage (write only when progress actually improves)
+      localStorage.setItem('gita_chapter_progress', JSON.stringify(state.chapterProgressCache));
+      state.chaptersDirty = true; // Chapter list badges need refresh
       maxProgress = progressPercent;
     } else {
       maxProgress = prevProgress;
@@ -2232,32 +2343,23 @@ function renderContinueCard() {
   const pos = state.lastReadPosition;
   if (!pos || !pos.key) return;
   
-  const verse = GITA_DATA.verses[pos.key];
-  if (!verse) return;
+  const quickStartBtn = document.getElementById('btn-home-quick-start');
+  const quickChaptersBtn = document.getElementById('btn-home-quick-chapters');
+  const quickTitle = document.getElementById('lbl-home-quick-start-title');
+  const quickDesc = document.getElementById('lbl-home-quick-start-desc');
   
-  const contSec = document.getElementById('continue-section');
-  const contTag = document.querySelector('.continue-tag span');
-  const contPreview = document.getElementById('continue-verse-preview');
-  const contRef = document.getElementById('continue-ref-text');
-  const resumeBtn = document.getElementById('btn-continue-read');
-  
-  if (contSec && contPreview && contRef && resumeBtn) {
-    // Show the English translation instead of Sanskrit
-    contPreview.classList.remove('sanskrit');
-    contPreview.style.fontFamily = 'var(--font-main)';
-    contPreview.style.fontSize = '1.02rem';
-    contPreview.style.lineHeight = '1.6';
-    contPreview.style.fontStyle = 'italic';
-    contPreview.style.color = 'var(--text-secondary)';
-    contPreview.style.fontWeight = '400';
-    contPreview.textContent = verse.translation_en;
-    
-    if (pos.isFirstLaunch) {
-      if (contTag) contTag.textContent = 'Start Journey • पठन प्रारम्भ करें';
-      contRef.textContent = `Chapter 1, Verse 1 • अध्याय १, श्लोक १`;
-      resumeBtn.textContent = 'Start Reading';
-      
-      resumeBtn.onclick = () => {
+  if (pos.isFirstLaunch) {
+    if (quickTitle) quickTitle.textContent = 'Start';
+    if (quickDesc) quickDesc.textContent = 'Chapter 1, Verse 1';
+  } else {
+    if (quickTitle) quickTitle.textContent = 'Resume';
+    if (quickDesc) quickDesc.textContent = `Chapter ${pos.chapter}, Verse ${pos.verse}`;
+  }
+
+  // Bind Quick Actions Hub clicks
+  if (quickStartBtn) {
+    quickStartBtn.onclick = () => {
+      if (pos.isFirstLaunch) {
         navigateTo('reader', 1);
         setTimeout(() => {
           const card = document.querySelector(`.verse-card[data-key="1.1"]`);
@@ -2268,13 +2370,7 @@ function renderContinueCard() {
             card.classList.add('verse-highlight-flash');
           }
         }, 400);
-      };
-    } else {
-      if (contTag) contTag.textContent = 'Continue Journey • पठन जारी रखें';
-      contRef.textContent = `Chapter ${pos.chapter}, Verse ${pos.verse} • अध्याय ${pos.chapter}, श्लोक ${pos.verse}`;
-      resumeBtn.textContent = 'Resume Reading';
-      
-      resumeBtn.onclick = () => {
+      } else {
         navigateTo('reader', pos.chapter);
         setTimeout(() => {
           const card = document.querySelector(`.verse-card[data-key="${pos.key}"]`);
@@ -2285,10 +2381,14 @@ function renderContinueCard() {
             card.classList.add('verse-highlight-flash');
           }
         }, 400);
-      };
-    }
-    
-    contSec.style.display = 'block';
+      }
+    };
+  }
+  
+  if (quickChaptersBtn) {
+    quickChaptersBtn.onclick = () => {
+      navigateTo('chapters');
+    };
   }
 }
 
@@ -2461,6 +2561,11 @@ function initGuidedReadingPaths() {
 
 // Global window-level back gesture handler invoked by Android native wrapper
 function handleBackButton() {
+  const drawerStreakAnalytics = document.getElementById('drawer-streak-analytics');
+  if (drawerStreakAnalytics && drawerStreakAnalytics.classList.contains('open')) {
+    closeDrawer(drawerStreakAnalytics);
+    return true;
+  }
   if (dom.drawerVerseDetail && dom.drawerVerseDetail.classList.contains('open')) {
     closeDrawer(dom.drawerVerseDetail);
     return true;
@@ -2588,8 +2693,8 @@ function recordReadingEvent(key) {
   events[today] = (events[today] || 0) + 1;
   localStorage.setItem('gita_reading_events', JSON.stringify(events));
 
-  // Trigger calendar update
-  renderHeatmap();
+  // Mark heatmap as dirty — it will re-render next time the streak drawer opens
+  state.heatmapDirty = true;
 }
 
 function calculateStreak() {
@@ -2623,9 +2728,9 @@ function calculateStreak() {
 }
 
 function renderHeatmap() {
-  const gridContainer = document.getElementById('streak-heatmap-grid');
-  const fireBadge = document.getElementById('streak-fire-badge');
-  const statsSpan = document.getElementById('heatmap-stats');
+  const gridContainer = document.getElementById('analytics-streak-heatmap-grid');
+  const fireBadge = document.getElementById('header-streak-count');
+  const statsSpan = document.getElementById('analytics-heatmap-stats');
   if (!gridContainer) return;
 
   gridContainer.innerHTML = '';
@@ -2638,12 +2743,24 @@ function renderHeatmap() {
     statsSpan.textContent = `${totalVerses} ${totalVerses === 1 ? 'Verse' : 'Verses'} Read`;
   }
 
-  // Render fire streak badge
+  // Render fire streak badge & best streak updates
   const streak = calculateStreak();
-  if (fireBadge) {
-    fireBadge.textContent = `🔥 ${streak} ${streak === 1 ? 'Day' : 'Days'}`;
-    fireBadge.style.display = streak > 0 ? 'inline-block' : 'none';
+  let bestStreak = parseInt(localStorage.getItem('gita_best_streak') || '0');
+  if (streak > bestStreak) {
+    bestStreak = streak;
+    localStorage.setItem('gita_best_streak', bestStreak.toString());
   }
+
+  // Update badge count
+  if (fireBadge) {
+    fireBadge.textContent = streak;
+  }
+
+  // Update detailed analytics counters in bottom sheet
+  const analyticsCurrentStreak = document.getElementById('analytics-current-streak');
+  const analyticsBestStreak = document.getElementById('analytics-best-streak');
+  if (analyticsCurrentStreak) analyticsCurrentStreak.textContent = streak;
+  if (analyticsBestStreak) analyticsBestStreak.textContent = bestStreak;
 
   // Draw a 10-week grid (70 days) ending today
   const boxes = [];

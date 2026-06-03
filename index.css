@@ -197,19 +197,16 @@ body {
   text-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
 }
 
-/* Glassmorphism class */
+/* Glassmorphism class — backdrop-filter removed from base class for WebView performance;
+   kept only on overlays and floating UI where blur is visually impactful */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
 }
 
 /* Glow border hover effect */
 .glass-glow {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
   transition: var(--transition-smooth);
